@@ -19,6 +19,9 @@ type asyncPrefixReleaser struct {
 	*trigger.Trigger
 	prefixReleaser
 
+	closeChan chan struct{} // Daemon closes this when shutting down.
+	doneChan  chan struct{} // Trigger closes this to confirm shutdown.
+
 	// Mutex protects read and write to 'queue'.
 	lock.Mutex
 	queue []string
@@ -32,6 +35,7 @@ func newAsyncPrefixReleaser(parent prefixReleaser, interval time.Duration) *asyn
 	result := &asyncPrefixReleaser{
 		queue:          make([]string, 0),
 		prefixReleaser: parent,
+		closeChan:      make(chan struct{}),
 	}
 
 	// trigger needs to be updated to reference the object above
@@ -53,10 +57,25 @@ func newAsyncPrefixReleaser(parent prefixReleaser, interval time.Duration) *asyn
 	return result
 }
 
+func (pr *asyncPrefixReleaser) Shutdown() {
+	close(pr.closeChan)
+	pr.Trigger.Shutdown()
+}
+
 // enqueue a set of prefixes to be released asynchronously.
 func (pr *asyncPrefixReleaser) enqueue(prefixes []string, reason string) {
 	pr.Lock()
 	defer pr.Unlock()
+	select {
+	case <-pr.closeChan:
+		log.WithFields(logrus.Fields{
+			logfields.CIDRS:  prefixes,
+			logfields.Reason: reason,
+		}).Debug("Received request to release prefixes but the daemon is shutting down")
+		return
+	default:
+		// fallthrough
+	}
 	pr.queue = append(pr.queue, prefixes...)
 	pr.TriggerWithReason(reason)
 }

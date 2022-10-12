@@ -27,6 +27,8 @@ var (
 	// ErrLocalIdentityAllocatorUninitialized is an error that's returned when
 	// the local identity allocator is uninitialized.
 	ErrLocalIdentityAllocatorUninitialized = errors.New("local identity allocator uninitialized")
+
+	LabelInjectorName = "ipcache-inject-labels"
 )
 
 // metadata contains the ipcache metadata. Mainily it holds a map which maps IP
@@ -571,7 +573,7 @@ func (ipc *IPCache) TriggerLabelInjection(src source.Source) {
 	// This controller is for retrying this operation in case it fails. It
 	// should eventually succeed.
 	ipc.UpdateController(
-		"ipcache-inject-labels",
+		LabelInjectorName,
 		controller.ControllerParams{
 			DoFunc: func(context.Context) error {
 				if err := ipc.InjectLabels(src); err != nil {
@@ -581,4 +583,9 @@ func (ipc *IPCache) TriggerLabelInjection(src source.Source) {
 			},
 		},
 	)
+}
+
+// ShutdownLabelInjection shuts down the controller in TriggerLabelInjection().
+func (ipc *IPCache) ShutdownLabelInjection() error {
+	return ipc.controllers.RemoveControllerAndWait(LabelInjectorName)
 }

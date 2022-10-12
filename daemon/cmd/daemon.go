@@ -1348,6 +1348,9 @@ func (d *Daemon) ReloadOnDeviceChange(devices []string) {
 
 // Close shuts down a daemon
 func (d *Daemon) Close() {
+	if err := d.ipcache.Shutdown(); err != nil {
+		log.WithError(err).Debug("Failure during ipcache shutdown")
+	}
 	if d.policyUpdater != nil {
 		d.policyUpdater.Shutdown()
 	}
