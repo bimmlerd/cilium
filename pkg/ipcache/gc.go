@@ -36,6 +36,7 @@ func newAsyncPrefixReleaser(parent prefixReleaser, interval time.Duration) *asyn
 		queue:          make([]string, 0),
 		prefixReleaser: parent,
 		closeChan:      make(chan struct{}),
+		doneChan:       make(chan struct{}),
 	}
 
 	// trigger needs to be updated to reference the object above
@@ -52,6 +53,9 @@ func newAsyncPrefixReleaser(parent prefixReleaser, interval time.Duration) *asyn
 			defer cancel()
 			result.run(ctx, reasons...)
 		},
+		ShutdownFunc: func() {
+			close(result.doneChan)
+		},
 	})
 
 	return result
@@ -60,6 +64,7 @@ func newAsyncPrefixReleaser(parent prefixReleaser, interval time.Duration) *asyn
 func (pr *asyncPrefixReleaser) Shutdown() {
 	close(pr.closeChan)
 	pr.Trigger.Shutdown()
+	<-pr.doneChan
 }
 
 // enqueue a set of prefixes to be released asynchronously.

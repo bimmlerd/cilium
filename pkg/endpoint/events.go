@@ -351,7 +351,6 @@ func (e *Endpoint) Start(id uint16) {
 		e.InitEventQueue()
 	}
 	e.eventQueue.Run()
-	e.getLogger().Info("New endpoint")
 }
 
 // Stop cleans up all goroutines managed by this endpoint (EventQueue,

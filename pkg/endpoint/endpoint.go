@@ -1156,7 +1156,6 @@ func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf Delete
 	e.setState(StateDisconnected, "Endpoint removed")
 
 	endpointPolicyStatus.Remove(e.ID)
-	e.getLogger().Info("Removed endpoint")
 
 	return errors
 }

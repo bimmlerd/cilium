@@ -7,6 +7,8 @@ package endpointmanager
 
 import (
 	"context"
+	"runtime/trace"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -16,18 +18,24 @@ import (
 	"github.com/cilium/cilium/pkg/addressing"
 	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/completion"
+	"github.com/cilium/cilium/pkg/counter"
 	"github.com/cilium/cilium/pkg/datapath"
+	"github.com/cilium/cilium/pkg/datapath/fake"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointid "github.com/cilium/cilium/pkg/endpoint/id"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
+	"github.com/cilium/cilium/pkg/endpointmanager/idallocator"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/ipcache"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/revert"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
+	"github.com/stretchr/testify/require"
 )
 
 // Hook up gocheck into the "go test" runner.
@@ -932,5 +940,118 @@ func (s *EndpointManagerSuite) TestWaitForEndpointsAtPolicyRev(c *C) {
 			args.cancel()
 		}
 		tt.postTestRun()
+	}
+}
+
+type fakeOwner struct {
+	compLock *lock.RWMutex
+	prefix   *counter.PrefixLengthCounter
+	dp       datapath.Datapath
+}
+
+func (o *fakeOwner) QueueEndpointBuild(ctx context.Context, epID uint64) (func(), error) {
+	return func() { time.Sleep(time.Millisecond) }, nil // FIXME reevaluate this
+}
+func (o *fakeOwner) GetCompilationLock() *lock.RWMutex                        { return o.compLock }
+func (o *fakeOwner) GetCIDRPrefixLengths() (s6, s4 []int)                     { return o.prefix.ToBPFData() }
+func (o *fakeOwner) SendNotification(msg monitorAPI.AgentNotifyMessage) error { return nil }
+func (o *fakeOwner) Datapath() datapath.Datapath                              { return o.dp }
+func (o *fakeOwner) GetDNSRules(epID uint16) restore.DNSRules                 { panic("no dns rules") }
+func (o *fakeOwner) RemoveRestoredDNSRules(epID uint16)                       {  }
+
+type fakePolicyRepoGetter struct {
+	repo *policy.Repository
+}
+
+func (fp *fakePolicyRepoGetter) GetPolicyRepository() *policy.Repository { return fp.repo }
+
+// func BenchmarkUpdatePolicyMaps10EP_10R(b *testing.B) {
+// 	bUpdatePM(b, 10, 10)
+// }
+
+// func BenchmarkUpdatePolicyMaps10EP_100R(b *testing.B) {
+// 	bUpdatePM(b, 10, 100)
+// }
+
+// func BenchmarkUpdatePolicyMaps10EP_200R(b *testing.B) {
+// 	bUpdatePM(b, 10, 200)
+// }
+
+func BenchmarkUpdatePolicyMaps100EP_10R(b *testing.B) {
+	bUpdatePM(b, 100, 10)
+}
+
+// func BenchmarkUpdatePolicyMaps100EP_100R(b *testing.B) {
+// 	bUpdatePM(b, 100, 100)
+// }
+
+func bUpdatePM(b *testing.B, numEPs, numRules int) {
+	option.Config.DryMode = true
+	b.StopTimer()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		owner := &fakeOwner{
+			prefix: counter.NewPrefixLengthCounter(120, 30), // FIXME these are random numbers
+			dp: fake.NewDatapath(),
+		}
+		idallocator.ReallocatePool() // FIXME why the heck does the epmgr _take_ a idAllocator but then use the global one
+		idAllocator := testidentity.NewMockIdentityAllocator(nil)
+		repo := policy.NewPolicyRepository(idAllocator, nil, nil)
+		repo.GetSelectorCache().SetLocalIdentityNotifier(testidentity.NewDummyIdentityNotifier())
+		policyGetter := &fakePolicyRepoGetter{repo}
+
+		for j := 0; j < numRules; j++ {
+			tuple := api.PortProtocol{Port: strconv.Itoa(1 + j%1024), Protocol: api.ProtoTCP}
+			portrule := &api.PortRule{
+				Ports: []api.PortProtocol{tuple},
+				Rules: &api.L7Rules{
+					HTTP: []api.PortRuleHTTP{
+						{Path: "/public", Method: "GET"},
+					},
+				},
+			}
+			selectors := []api.EndpointSelector{
+				api.NewESFromLabels(),
+				api.NewESFromLabels(labels.ParseSelectLabel("bar")),
+			}
+			rule := api.Rule{
+				EndpointSelector: selectors[1],
+				Ingress: []api.IngressRule{
+					{ToPorts: api.PortRules{*portrule}},
+				},
+			}
+			_, _, err := repo.Add(rule, nil)
+			require.NoError(b, err)
+		}
+
+		mgr := NewEndpointManager(&dummyEpSyncher{})
+
+		bg := context.Background()
+		_, t := trace.NewTask(bg, "start ipcache")
+		ipc := ipcache.NewIPCache(nil)
+		t.End()
+
+		_, ept := trace.NewTask(bg, "spawn eps")
+		eps := make([]*endpoint.Endpoint, numEPs)
+		for j := 0; j < numEPs; j++ {
+			trace.Log(bg, "", "ep "+strconv.Itoa(j))
+			ep := endpoint.NewEndpointWithState(owner, policyGetter, ipc, &endpoint.FakeEndpointProxy{}, idAllocator, 0, endpoint.StateReady)
+			eps[j] = ep
+			require.NoError(b, mgr.expose(ep))
+			trace.Log(bg, "", "ep "+strconv.Itoa(j)+" spawned")
+
+		}
+		ept.End()
+		b.StartTimer()
+
+		var wg sync.WaitGroup
+		mgr.UpdatePolicyMaps(context.Background(), &wg).Wait()
+		b.StopTimer()
+
+		for j, ep := range eps {
+			ep.Delete(endpoint.DeleteConfig{})
+			eps[j] = nil
+		}
+		require.NoError(b, ipc.Shutdown())
 	}
 }

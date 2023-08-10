@@ -7,6 +7,7 @@ package policy
 
 import (
 	"fmt"
+	"testing"
 
 	"gopkg.in/check.v1"
 
@@ -1387,6 +1388,43 @@ func (ds *PolicyTestSuite) TestMapState_AccumulateMapChanges(c *check.C) {
 
 var testLabels = labels.LabelArray{
 	labels.NewLabel("test", "ing", labels.LabelSourceReserved),
+}
+
+func BenchmarkMapState_DenyPreferredInsert10(b *testing.B) {
+	benchDenyPrefInsert(b, 10)
+}
+
+func BenchmarkMapState_DenyPreferredInsert1000(b *testing.B) {
+	benchDenyPrefInsert(b, 1000)
+}
+
+func BenchmarkMapState_DenyPreferredInsert100000(b *testing.B) {
+	benchDenyPrefInsert(b, 100000)
+}
+
+func benchDenyPrefInsert(b *testing.B, numKey int) {
+	protos := []uint8{0, 1, 6, 17, 58} // from u8proto
+	keys := make([]Key, numKey)
+	entries := make([]MapStateEntry, numKey)
+
+	for i := range keys {
+		keys[i].Identity = uint32(i)
+		keys[i].DestPort = uint16(i)
+		keys[i].TrafficDirection = uint8(i % 2)
+		keys[i].Nexthdr = protos[i % len(protos)]
+
+		entries[i].IsDeny = i % 2 == 0
+		entries[i].DerivedFromRules = labels.LabelArrayList{}
+		entries[i].owners = map[MapStateOwner]struct{}{}
+		entries[i].dependents = Keys{}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m := MapState{}
+		for i := range keys {
+			m.DenyPreferredInsert(keys[i], entries[i], nil)
+		}
+	}
 }
 
 func (ds *PolicyTestSuite) TestMapState_AddVisibilityKeys(c *check.C) {
