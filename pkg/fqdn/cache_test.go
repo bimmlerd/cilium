@@ -12,6 +12,7 @@ import (
 	"net"
 	"regexp"
 	"sort"
+	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -1058,4 +1059,170 @@ func (ds *DNSCacheTestSuite) TestZombiesDumpAlive(c *C) {
 	cidrMatcher = func(ip net.IP) bool { return cidr.Contains(ip) }
 	alive = zombies.DumpAlive(cidrMatcher)
 	c.Assert(alive, HasLen, 0)
+}
+
+func Test_sortZombieMappingSlice(t *testing.T) {
+	// create some moments in time
+	numMoments := 30
+	moments := make([]time.Time, 0, numMoments)
+	for i := 0; i < numMoments; i++ {
+		moments = append(moments, time.Date(2023, time.August, 11, 17, i, 10, 0, time.Local))
+	}
+	
+	type args struct {
+		alive     []*DNSZombieMapping
+		randomise bool
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			"empty",
+			args{alive: nil},
+		},
+		{
+			"single",
+			args{alive: []*DNSZombieMapping{{
+				Names:           []string{"test.com"},
+				AliveAt:         moments[0],
+				DeletePendingAt: moments[1],
+			}}},
+		},
+		{
+			"swapped alive at",
+			args{alive: []*DNSZombieMapping{
+				{
+					AliveAt: moments[2],
+				},
+				{
+					AliveAt: moments[0],
+				},
+			}},
+		},
+		{
+			"equal alive, swapped delete pending at",
+			args{alive: []*DNSZombieMapping{
+				{
+					AliveAt:         moments[0],
+					DeletePendingAt: moments[2],
+				},
+				{
+					AliveAt:         moments[0],
+					DeletePendingAt: moments[1],
+				},
+			}},
+		},
+		{
+			"swapped equal times, tiebreaker",
+			args{alive: []*DNSZombieMapping{
+				{
+					Names:           []string{"test.com", "test2.com"},
+					AliveAt:         moments[0],
+					DeletePendingAt: moments[1],
+				},
+				{
+					Names:           []string{"test.com"},
+					AliveAt:         moments[0],
+					DeletePendingAt: moments[1],
+				},
+			}},
+		},
+		{
+			"randomise",
+			args{randomise: true,
+				alive: []*DNSZombieMapping{
+					{
+						Names:           []string{"test.com"},
+						AliveAt:         moments[2],
+						DeletePendingAt: moments[2],
+					},
+					{
+						AliveAt:         moments[2],
+						DeletePendingAt: moments[2],
+					},
+					{
+						AliveAt:         moments[2],
+						DeletePendingAt: moments[1],
+					},
+					{
+						AliveAt:         moments[2],
+						DeletePendingAt: moments[0],
+					},
+					{
+						AliveAt:         moments[1],
+						DeletePendingAt: moments[1],
+					},
+					{
+						AliveAt:         moments[1],
+						DeletePendingAt: moments[0],
+					},
+					{
+						AliveAt:         moments[0],
+						DeletePendingAt: moments[2],
+					},
+					{
+						AliveAt:         moments[0],
+						DeletePendingAt: moments[1],
+					},
+				}},
+		},
+	}
+
+	validate := func(t *testing.T, s []*DNSZombieMapping) {
+		sl := len(s)
+		for i := 0; i < sl; i++ {
+			for j := i + 1; j < sl; j++ {
+				if s[i].AliveAt.Before(s[j].AliveAt) {
+					continue
+				} else if s[i].AliveAt.After(s[j].AliveAt) {
+					fmt.Println("======================")
+					fmt.Printf("i: %v, j %v\n", i, j)
+					fmt.Printf("s[i]: %v\n s[j] %v\n", s[i], s[j])
+					fmt.Println("======================")
+
+					t.Fatalf("alive at order wrong: %v is after %v", s[i].AliveAt, s[j].AliveAt)
+					return
+				}
+
+				if s[i].DeletePendingAt.Before(s[j].DeletePendingAt) {
+					continue
+				} else if s[i].DeletePendingAt.After(s[j].DeletePendingAt) {
+					t.Fatalf("delete pending at order wrong: %v is after %v", s[i].DeletePendingAt, s[j].DeletePendingAt)
+					return
+				}
+
+				if len(s[i].Names) > len(s[j].Names) {
+					t.Fatalf("tiebreaker of number of names is wrong %v is longer than %v", s[i].Names, s[j].Names)
+				}
+			}
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ol := len(tt.args.alive)
+
+			if tt.args.randomise {
+				for i := 0; i < 2*ol*ol; i++ {
+					rand.Shuffle(ol, func(i, j int) {
+						tt.args.alive[i], tt.args.alive[j] = tt.args.alive[j], tt.args.alive[i]
+					})
+
+					sortZombieMappingSlice(tt.args.alive)
+					if len(tt.args.alive) != ol {
+						t.FailNow()
+					}
+					validate(t, tt.args.alive)
+				}
+			} else {
+				sortZombieMappingSlice(tt.args.alive)
+				if len(tt.args.alive) != ol {
+					t.FailNow()
+				}
+				validate(t, tt.args.alive)
+			}
+
+		})
+	}
 }

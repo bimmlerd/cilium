@@ -5,6 +5,7 @@ package fqdn
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"regexp"
 	"sort"
@@ -733,6 +734,10 @@ type DNSZombieMapping struct {
 	DeletePendingAt time.Time `json:"delete-pending-at,omitempty"`
 }
 
+func (z *DNSZombieMapping) String() string {
+	return fmt.Sprintf("DNSZombieMapping{AliveAt: %s, DeletePendingAt: %s, IP: %s, Names: %v}", z.AliveAt, z.DeletePendingAt, z.IP, z.Names)
+}
+
 // DeepCopy returns a copy of zombie that does not share any internal pointers
 // or fields
 func (zombie *DNSZombieMapping) DeepCopy() *DNSZombieMapping {
@@ -868,9 +873,18 @@ func (zombies *DNSZombieMappings) isZombieAlive(zombie *DNSZombieMapping, aliveN
 // Important zombies shuffle to the end of the slice.
 func sortZombieMappingSlice(alive []*DNSZombieMapping) {
 	sort.Slice(alive, func(i, j int) bool {
-		return alive[i].AliveAt.Before(alive[j].AliveAt) ||
-			alive[i].DeletePendingAt.Before(alive[j].DeletePendingAt) ||
-			len(alive[i].Names) < len(alive[j].Names)
+		switch {
+		case alive[i].AliveAt.Before(alive[j].AliveAt):
+			return true
+		case alive[i].AliveAt.After(alive[j].AliveAt):
+			return false
+		case alive[i].DeletePendingAt.Before(alive[j].DeletePendingAt):
+			return true
+		case alive[i].DeletePendingAt.After(alive[j].DeletePendingAt):
+			return false
+		default:
+			return len(alive[i].Names) < len(alive[j].Names)
+		}
 	})
 }
 
