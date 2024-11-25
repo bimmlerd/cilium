@@ -199,7 +199,7 @@ func formatMap(w io.Writer, statsMap []policymap.PolicyEntryDump) {
 				policyStr, trafficDirectionString, id, port, proxyPort, policy.AuthType(stat.AuthType), stat.Bytes, stat.Packets, prefixLen)
 		} else if lbls := labelsID[id]; lbls != nil && len(lbls.Labels) > 0 {
 			first := true
-			for _, lbl := range lbls.Labels.GetPrintableModel() {
+			for lbl := range lbls.Labels.Printable() {
 				if first {
 					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t\n",
 						policyStr, trafficDirectionString, lbl, port, proxyPort, policy.AuthType(stat.AuthType), stat.Bytes, stat.Packets, prefixLen)

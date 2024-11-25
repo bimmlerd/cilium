@@ -23,13 +23,13 @@ type Label unique.Handle[labelRep]
 // allocations.
 var labelCache = newCache[labelRep]()
 
-// NewLabel returns a new label. Labels created with the same
+// MakeLabel returns a new label. Labels created with the same
 // source, key and value will share a single allocation.
-func NewLabel(key, value, source string) Label {
-	return NewCIDRLabel(key, value, source, nil)
+func MakeLabel(key, value, source string) Label {
+	return MakeCIDRLabel(key, value, source, nil)
 }
 
-func NewCIDRLabel(key, value, source string, cidr *netip.Prefix) Label {
+func MakeCIDRLabel(key, value, source string, cidr *netip.Prefix) Label {
 	return Label(labelCache.lookupOrMake(
 		// Look up the cache entry by hash of key+value. As the likelihood
 		// that the same key is from multiple sources isn't that high, we're
@@ -112,18 +112,18 @@ func (l *Label) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("invalid Label: '%s' does not contain label key", b)
 		}
 
-		*l = NewLabel(jl.Key, jl.Value, jl.Source)
+		*l = MakeLabel(jl.Key, jl.Value, jl.Source)
 	}
 
 	if jl.Source == LabelSourceCIDR {
 		c, err := LabelToPrefix(l.Key())
 		if err == nil {
-			*l = NewCIDRLabel(jl.Key, jl.Value, jl.Source, &c)
+			*l = MakeCIDRLabel(jl.Key, jl.Value, jl.Source, &c)
 		} else {
 			return fmt.Errorf("failed to parse CIDR label: invalid prefix: %w", err)
 		}
 	} else {
-		*l = NewLabel(jl.Key, jl.Value, jl.Source)
+		*l = MakeLabel(jl.Key, jl.Value, jl.Source)
 	}
 
 	return nil
@@ -233,12 +233,12 @@ func parseLabel(str string, delim byte) Label {
 			if err != nil {
 				logrus.WithField(logfields.Label, str).WithError(err).Error("Failed to parse CIDR label: invalid prefix.")
 			} else {
-				return NewCIDRLabel(key, value, src, &c)
+				return MakeCIDRLabel(key, value, src, &c)
 			}
 		}
 	}
 
-	return NewLabel(key, value, src)
+	return MakeLabel(key, value, src)
 }
 
 // ParseSelectLabel returns a selecting label representation of the given
@@ -255,7 +255,7 @@ func ParseSelectLabel(str string) Label {
 func ParseSelectLabelWithDelim(str string, delim byte) Label {
 	lbl := parseLabel(str, delim)
 	if lbl.Source() == LabelSourceUnspec {
-		return NewLabel(lbl.Key(), lbl.Value(), LabelSourceAny)
+		return MakeLabel(lbl.Key(), lbl.Value(), LabelSourceAny)
 	}
 	return lbl
 }

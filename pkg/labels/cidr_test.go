@@ -5,6 +5,7 @@ package labels
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,7 +154,7 @@ func TestGetCIDRLabels(t *testing.T) {
 			option.Config.EnableIPv6 = tc.enableIPv6
 
 			lbls := GetCIDRLabels(tc.prefix)
-			lblArray := lbls.LabelArray()
+			lblArray := slices.Collect(lbls.All())
 			assert.ElementsMatch(t, lblArray, tc.expected)
 		})
 	}
@@ -279,11 +280,11 @@ func TestGetPrintableModel(t *testing.T) {
 		"k8s:foo=bar",
 		"reserved:remote-node",
 	})
-	cl.MergeLabels(GetCIDRLabels(netip.MustParsePrefix("10.0.0.6/32")))
-	cl.MergeLabels(GetCIDRLabels(netip.MustParsePrefix("10.0.1.0/24")))
-	cl.MergeLabels(GetCIDRLabels(netip.MustParsePrefix("192.168.0.0/24")))
-	cl.MergeLabels(GetCIDRLabels(netip.MustParsePrefix("fc00:c111::5/128")))
-	cl.MergeLabels(GetCIDRLabels(netip.MustParsePrefix("fc00:c112::0/64")))
+	cl = Merge(cl, GetCIDRLabels(netip.MustParsePrefix("10.0.0.6/32")))
+	cl = Merge(cl, GetCIDRLabels(netip.MustParsePrefix("10.0.1.0/24")))
+	cl = Merge(cl, GetCIDRLabels(netip.MustParsePrefix("192.168.0.0/24")))
+	cl = Merge(cl, GetCIDRLabels(netip.MustParsePrefix("fc00:c111::5/128")))
+	cl = Merge(cl, GetCIDRLabels(netip.MustParsePrefix("fc00:c112::0/64")))
 	assert.Equal(t,
 		[]string{
 			"cidr:10.0.0.6/32",
@@ -296,7 +297,7 @@ func TestGetPrintableModel(t *testing.T) {
 			"reserved:world-ipv4",
 			"reserved:world-ipv6",
 		},
-		cl.GetPrintableModel(),
+		cl.String(),
 	)
 }
 

@@ -6,6 +6,7 @@ package endpoint
 import (
 	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -787,7 +788,7 @@ func (e *Endpoint) getK8sPodLabels() labels.Labels {
 		return nil
 	}
 
-	allLabelsFromK8s := allLabels.GetFromSource(labels.LabelSourceK8s)
+	allLabelsFromK8s := slices.Collect(allLabels.FromSource(labels.LabelSourceK8s))
 
 	k8sEPPodLabels := labels.Labels{}
 	for k, v := range allLabelsFromK8s {

@@ -84,7 +84,7 @@ func printIdentitesEndpoints(identities []*models.IdentityEndpoints) {
 	for _, identity := range identities {
 		lbls := labels.NewLabelsFromModel(identity.Identity.Labels)
 		first := true
-		for _, lbl := range lbls.GetPrintableModel() {
+		for lbl := range lbls.Printable() {
 			if first {
 				fmt.Fprintf(w, "%d\t%s\t%d\t\n", identity.Identity.ID, lbl, identity.RefCount)
 				first = false

@@ -29,7 +29,7 @@ func testNewLabels(t *testing.T, n int) {
 		s := fmt.Sprintf("%04d", i) // pad with zeros for sorted order
 		k := "key" + s
 		v := "value" + s
-		l := NewLabel(k, v, "source"+s)
+		l := MakeLabel(k, v, "source"+s)
 		mapLabels[k] = v
 		testLabels = append(testLabels, l)
 		expectedStrings = append(expectedStrings, l.String())
@@ -81,7 +81,7 @@ func BenchmarkNewLabels_Small(b *testing.B) {
 	for i := range smallLabelsSize - 1 {
 		s := strconv.FormatInt(int64(i), 10)
 		testLabels = append(testLabels,
-			NewLabel("key"+s, "value"+s, "source"+s))
+			MakeLabel("key"+s, "value"+s, "source"+s))
 	}
 	b.ResetTimer()
 	for range b.N {
@@ -92,11 +92,11 @@ func BenchmarkNewLabels_Small(b *testing.B) {
 func BenchmarkNewLabels_Small_Combined(b *testing.B) {
 	for range b.N {
 		NewLabels(
-			NewLabel("key1", "value1", "source1"),
-			NewLabel("key2", "value2", "source2"),
-			NewLabel("key3", "value3", "source3"),
-			NewLabel("key4", "value4", "source4"),
-			NewLabel("key5", "value5", "source5"),
+			MakeLabel("key1", "value1", "source1"),
+			MakeLabel("key2", "value2", "source2"),
+			MakeLabel("key3", "value3", "source3"),
+			MakeLabel("key4", "value4", "source4"),
+			MakeLabel("key5", "value5", "source5"),
 		)
 	}
 }
@@ -106,7 +106,7 @@ func BenchmarkGet_Small(b *testing.B) {
 	for i := range smallLabelsSize - 1 {
 		s := strconv.FormatInt(int64(i), 10)
 		testLabels = append(testLabels,
-			NewLabel("key"+s, "value"+s, "source"+s))
+			MakeLabel("key"+s, "value"+s, "source"+s))
 	}
 	lbls := NewLabels(testLabels...)
 	b.ResetTimer()
@@ -120,7 +120,7 @@ func BenchmarkNewLabels_Large(b *testing.B) {
 	for i := range 3 * smallLabelsSize {
 		s := strconv.FormatInt(int64(i), 10)
 		testLabels = append(testLabels,
-			NewLabel("key"+s, "value"+s, "source"+s))
+			MakeLabel("key"+s, "value"+s, "source"+s))
 	}
 	b.ResetTimer()
 	for range b.N {
@@ -134,7 +134,7 @@ func BenchmarkGet_Large(b *testing.B) {
 	for i := range 3 * smallLabelsSize {
 		s := strconv.FormatInt(int64(i), 10)
 		testLabels = append(testLabels,
-			NewLabel("key"+s, "value"+s, "source"+s))
+			MakeLabel("key"+s, "value"+s, "source"+s))
 		lastKey = "key" + s
 	}
 	lbls := NewLabels(testLabels...)

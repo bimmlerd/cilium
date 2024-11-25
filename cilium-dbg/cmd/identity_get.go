@@ -34,7 +34,7 @@ func printIdentities(identities []*models.Identity) {
 	for _, identity := range identities {
 		lbls := labels.NewLabelsFromModel(identity.Labels)
 		first := true
-		for _, lbl := range lbls.GetPrintableModel() {
+		for lbl := range lbls.Printable() {
 			if first {
 				fmt.Fprintf(w, "%d\t%s\n", identity.ID, lbl)
 				first = false

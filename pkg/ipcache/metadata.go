@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/labels"
+	v2 "github.com/cilium/cilium/pkg/labels/v2"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
@@ -731,7 +732,7 @@ func (ipc *IPCache) resolveIdentity(ctx context.Context, prefix netip.Prefix, in
 // However, nodes *are* allowed to be selectable by CIDR and CIDR equivalents
 // if PolicyCIDRMatchesNodes() is true.
 func resolveLabels(prefix netip.Prefix, lbls labels.Labels) labels.Labels {
-	out := labels.NewFrom(lbls)
+	out := lbls
 
 	isNode := lbls.HasRemoteNodeLabel() || lbls.HasHostLabel()
 
@@ -739,36 +740,43 @@ func resolveLabels(prefix netip.Prefix, lbls labels.Labels) labels.Labels {
 		lbls.HasHealthLabel() ||
 		lbls.HasIngressLabel())
 
-	// In-cluster entities must not have reserved:world.
-	if isInCluster {
-		out = out.Remove(labels.LabelWorld)
-		out = out.Remove(labels.LabelWorldIPv4)
-		out = out.Remove(labels.LabelWorldIPv6)
+	// add world if not in-cluster.
+	if !isInCluster {
+		out = out.AddWorldLabel(prefix.Addr())
 	}
 
-	// In-cluster entities must not have cidr or fqdn labels.
-	// Exception: nodes may, when PolicyCIDRMatchesNodes() is enabled.
-	if isInCluster && !(isNode && option.Config.PolicyCIDRMatchesNodes()) {
-		out = out.RemoveFromSource(labels.LabelSourceCIDR)
-		out = out.RemoveFromSource(labels.LabelSourceFQDN)
-		out = out.RemoveFromSource(labels.LabelSourceCIDRGroup)
-	}
+	out = out.Filter(func(l v2.Label) bool {
+		// In-cluster entities must not have reserved:world.
+		if isInCluster {
+			out = out.Remove(labels.LabelWorld)
+			out = out.Remove(labels.LabelWorldIPv4)
+			out = out.Remove(labels.LabelWorldIPv6)
+		}
 
-	// Remove all labels with source `node:`, unless this is a node *and* node labels are enabled.
-	if !(isNode && option.Config.PerNodeLabelsEnabled()) {
-		out = out.RemoveFromSource(labels.LabelSourceNode)
-	}
+		// In-cluster entities must not have cidr or fqdn labels.
+		// Exception: nodes may, when PolicyCIDRMatchesNodes() is enabled.
+		if isInCluster && !(isNode && option.Config.PolicyCIDRMatchesNodes()) {
+			switch l.Source() {
+			case labels.LabelSourceCIDR, labels.LabelSourceCIDRGroup, labels.LabelSourceFQDN:
+				return false
+			}
+		}
+
+		// Remove all labels with source `node:`, unless this is a node *and* node labels are enabled.
+		if !(isNode && option.Config.PerNodeLabelsEnabled()) {
+			if l.Source() == labels.LabelSourceNode {
+				return false
+			}
+		}
+
+		return true
+	})
 
 	// No empty labels allowed.
 	// Add in (cidr:<address/prefix>) label as a fallback.
 	// This should not be hit in production, but is used in tests.
-	if len(out) == 0 {
+	if out.Len() == 0 {
 		out = labels.GetCIDRLabels(prefix)
-	}
-
-	// add world if not in-cluster.
-	if !isInCluster {
-		out.AddWorldLabel(prefix.Addr())
 	}
 
 	return out
@@ -796,7 +804,7 @@ func (ipc *IPCache) updateReservedHostLabels(prefix netip.Prefix, lbls labels.La
 	// aggregate all labels and update static identity
 	newLabels := labels.NewFrom(labels.LabelHost)
 	for _, l := range ipc.metadata.reservedHostLabels {
-		newLabels.MergeLabels(l)
+		newLabels = labels.Merge(newLabels, l)
 	}
 
 	log.WithField(logfields.Labels, newLabels).Debug("Merged labels for reserved:host identity")

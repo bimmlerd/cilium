@@ -300,7 +300,7 @@ func (n *NameManager) RestoreCache(preCachePath string, restoredEPs []EndpointDN
 		for addr, names := range ipsToNames {
 			lbls := labels.Labels{}
 			for _, name := range names {
-				lbls.MergeLabels(deriveLabelsForName(name, oldSelectors))
+				lbls = labels.Merge(lbls, deriveLabelsForName(name, oldSelectors))
 			}
 
 			prefix := netip.PrefixFrom(addr, addr.BitLen())

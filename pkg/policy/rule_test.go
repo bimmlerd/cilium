@@ -2638,7 +2638,7 @@ func TestMatches(t *testing.T) {
 	td.addIdentity(notSelectedIdentity)
 
 	hostLabels := labels.Labels{selectedEpLabels.Key(): selectedEpLabels}
-	hostLabels.MergeLabels(labels.LabelHost)
+	hostLabels = labels.Merge(hostLabels, labels.LabelHost)
 	hostIdentity := identity.NewIdentity(identity.ReservedIdentityHost, hostLabels)
 	td.addIdentity(hostIdentity)
 
@@ -2669,7 +2669,7 @@ func TestMatches(t *testing.T) {
 
 	// Assert that mutable host identities are handled
 	// First, add an additional label, ensure that match succeeds
-	hostLabels.MergeLabels(labels.NewLabelsFromModel([]string{"foo=bar"}))
+	hostLabels = labels.Merge(hostLabels, labels.NewLabelsFromModel([]string{"foo=bar"}))
 	hostIdentity = identity.NewIdentity(identity.ReservedIdentityHost, hostLabels)
 	td.addIdentity(hostIdentity)
 	require.True(t, hostRule.matchesSubject(hostIdentity))

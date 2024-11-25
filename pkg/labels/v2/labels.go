@@ -59,46 +59,6 @@ func labelsHash(lbls []Label) (hash uint64) {
 	return
 }
 
-// Map2Labels transforms in the form: map[key(string)]value(string) into Labels. The
-// source argument will overwrite the source written in the key of the given map.
-// Example:
-// l := Map2Labels(map[string]string{"k8s:foo": "bar"}, "cilium")
-// l == [{Key: "foo", Value: "bar", Source: "cilium")]
-func Map2Labels(m map[string]string, source string) Labels {
-	if len(m) <= smallLabelsSize {
-		// Fast path: fits into the small array and we can sort in-place.
-		rep := smallRep{}
-		for k, v := range m {
-			rep.smallArray[rep.smallLen] = NewLabel(k, v, source)
-			rep.smallLen++
-		}
-		slices.SortFunc(rep.smallArray[:rep.smallLen], func(a, b Label) int {
-			return strings.Compare(a.Key(), b.Key())
-		})
-		return Labels{
-			handle: unique.Make(rep),
-		}
-	}
-
-	// Slow path: does not fit into small array. Build up an temporary,
-	// sort it, and construct the labels with it.
-	lbls := make([]Label, 0, len(m))
-	for k, v := range m {
-		lbls = append(lbls, NewLabel(k, v, source))
-	}
-	return NewLabels(lbls...)
-}
-
-func (lbls Labels) StringMap() (m map[string]string) {
-	m = make(map[string]string, lbls.Len())
-	for l := range lbls.All() {
-		rep := l.rep()
-		// Key is "Source:Key", which is what we already have in skv.
-		m[rep.skv[:rep.vpos-1]] = rep.value()
-	}
-	return
-}
-
 func (lbls Labels) Len() int {
 	length := int(lbls.handle.Value().smallLen)
 	if lbls.overflow != nil {
@@ -153,20 +113,6 @@ func (lbls Labels) All() iter.Seq[Label] {
 			}
 		}
 	}
-}
-
-func (lbls Labels) String() string {
-	var b strings.Builder
-	for l := range lbls.All() {
-		b.WriteString(l.String())
-		b.WriteByte(',')
-	}
-	s := b.String()
-	if len(s) > 0 {
-		// Drop trailing comma
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 // smallLabelsSize is the number of labels to store in the "small" array.

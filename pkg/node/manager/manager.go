@@ -619,7 +619,7 @@ func (m *manager) nodeIdentityLabels(n nodeTypes.Node) (nodeLabels labels.Labels
 						prefix, err := addr.Prefix(bitLen)
 						if err == nil {
 							cidrLabels := labels.GetCIDRLabels(prefix)
-							nodeLabels.MergeLabels(cidrLabels)
+							nodeLabels = labels.Merge(nodeLabels, cidrLabels)
 						}
 					}
 				}
@@ -632,7 +632,7 @@ func (m *manager) nodeIdentityLabels(n nodeTypes.Node) (nodeLabels labels.Labels
 	} else if !n.IsLocal() && option.Config.PerNodeLabelsEnabled() {
 		lbls := labels.Map2Labels(n.Labels, labels.LabelSourceNode)
 		filteredLbls, _ := labelsfilter.FilterNodeLabels(lbls)
-		nodeLabels.MergeLabels(filteredLbls)
+		nodeLabels = labels.Merge(nodeLabels, filteredLbls)
 	}
 
 	return nodeLabels, hasOverride
@@ -711,7 +711,7 @@ func (m *manager) NodeUpdated(n nodeTypes.Node) {
 		// Add the CIDR labels for this node, if we allow selecting nodes by CIDR
 		if m.conf.PolicyCIDRMatchesNodes() {
 			lbls = labels.NewFrom(nodeLabels)
-			lbls.MergeLabels(labels.GetCIDRLabels(prefix))
+			lbls = labels.Merge(lbls, labels.GetCIDRLabels(prefix))
 		}
 
 		// Always associate the prefix with metadata, even though this may not

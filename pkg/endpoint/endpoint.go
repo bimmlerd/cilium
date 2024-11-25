@@ -1683,8 +1683,8 @@ func APICanModify(e *Endpoint) error {
 	if e.IsInit() {
 		return nil
 	}
-	if e.OpLabels.OrchestrationIdentity.IsReserved() {
-		return fmt.Errorf("endpoint may not be associated reserved labels")
+	if lbls := e.OpLabels.OrchestrationIdentity.FindReserved(); lbls.Len() != 0 {
+		return fmt.Errorf("endpoint may not be associated reserved labels: %v", lbls)
 	}
 	return nil
 }
@@ -1772,7 +1772,7 @@ func (e *Endpoint) metadataResolver(ctx context.Context,
 
 	// Merge the labels retrieved from the 'resolveMetadata' into the base
 	// labels.
-	controllerBaseLabels.MergeLabels(k8sMetadata.IdentityLabels)
+	controllerBaseLabels = labels.Merge(controllerBaseLabels, k8sMetadata.IdentityLabels)
 
 	e.SetPod(pod)
 	e.SetK8sMetadata(k8sMetadata.ContainerPorts)
@@ -1962,7 +1962,7 @@ func (e *Endpoint) InitWithIngressLabels(ctx context.Context, launchTime time.Du
 	}
 
 	epLabels := labels.Labels{}
-	epLabels.MergeLabels(labels.LabelIngress)
+	epLabels = labels.Merge(epLabels, labels.LabelIngress)
 
 	// Give the endpoint a security identity
 	newCtx, cancel := context.WithTimeout(ctx, launchTime)
@@ -1981,12 +1981,12 @@ func (e *Endpoint) InitWithNodeLabels(ctx context.Context, nodeLabels map[string
 	}
 
 	epLabels := labels.Labels{}
-	epLabels.MergeLabels(labels.LabelHost)
+	epLabels = labels.Merge(epLabels, labels.LabelHost)
 
 	// Initialize with known node labels.
 	newLabels := labels.Map2Labels(nodeLabels, labels.LabelSourceK8s)
 	newIdtyLabels, _ := labelsfilter.Filter(newLabels)
-	epLabels.MergeLabels(newIdtyLabels)
+	epLabels = labels.Merge(epLabels, newIdtyLabels)
 
 	// Give the endpoint a security identity
 	newCtx, cancel := context.WithTimeout(ctx, launchTime)

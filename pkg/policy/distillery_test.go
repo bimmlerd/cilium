@@ -1887,8 +1887,8 @@ func Test_EnsureEntitiesSelectableByCIDR(t *testing.T) {
 
 	SetPolicyEnabled(option.DefaultEnforcement)
 	hostLabel := labels.NewFrom(labels.LabelHost)
-	hostLabel.MergeLabels(lblHostIPv4CIDR)
-	hostLabel.MergeLabels(lblHostIPv6CIDR)
+	hostLabel = labels.Merge(hostLabel, lblHostIPv4CIDR)
+	hostLabel = labels.Merge(hostLabel, lblHostIPv6CIDR)
 	identityCache := identity.IdentityMap{
 		identity.NumericIdentity(identityFoo): labelsFoo,
 		identity.ReservedIdentityHost:         hostLabel.LabelArray(),

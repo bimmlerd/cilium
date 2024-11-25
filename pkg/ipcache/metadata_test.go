@@ -252,7 +252,7 @@ func TestUpdateLocalNode(t *testing.T) {
 	ctx := context.Background()
 
 	bothLabels := labels.Labels{}
-	bothLabels.MergeLabels(labels.LabelHost)
+	bothLabels = labels.Merge(bothLabels, labels.LabelHost)
 	bothLabels.MergeLabels(labels.LabelKubeAPIServer)
 
 	selectorCacheHas := func(lbls labels.Labels) {

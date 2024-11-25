@@ -174,7 +174,7 @@ func (s prefixInfo) sortedBySourceThenResourceID() []ipcachetypes.ResourceID {
 func (s prefixInfo) ToLabels() labels.Labels {
 	l := labels.NewLabelsFromModel(nil)
 	for _, v := range s {
-		l.MergeLabels(v.labels)
+		l = labels.Merge(l, v.labels)
 	}
 	return l
 }

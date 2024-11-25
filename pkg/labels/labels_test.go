@@ -13,55 +13,25 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	v2 "github.com/cilium/cilium/pkg/labels/v2"
 )
 
 var (
 	// Elements are sorted by the key
 	lblsArray = []string{`unspec:%=%ed`, `unspec://=/=`, `unspec:foo=bar`, `unspec:foo2==bar2`, `unspec:foo=====`, `unspec:foo\\==\=`, `unspec:key=`}
-	lbls      = Labels{
-		"foo":    NewLabel("foo", "bar", LabelSourceUnspec),
-		"foo2":   NewLabel("foo2", "=bar2", LabelSourceUnspec),
-		"key":    NewLabel("key", "", LabelSourceUnspec),
-		"foo==":  NewLabel("foo==", "==", LabelSourceUnspec),
-		`foo\\=`: NewLabel(`foo\\=`, `\=`, LabelSourceUnspec),
-		`//=/`:   NewLabel(`//=/`, "", LabelSourceUnspec),
-		`%`:      NewLabel(`%`, `%ed`, LabelSourceUnspec),
-	}
+	lbls      = NewLabels(
+		NewLabel("foo", "bar", LabelSourceUnspec),
+		NewLabel("foo2", "=bar2", LabelSourceUnspec),
+		NewLabel("key", "", LabelSourceUnspec),
+		NewLabel("foo==", "==", LabelSourceUnspec),
+		NewLabel(`foo\\=`, `\=`, LabelSourceUnspec),
+		NewLabel(`//=/`, "", LabelSourceUnspec),
+		NewLabel(`%`, `%ed`, LabelSourceUnspec),
+	)
 
 	DefaultLabelSourceKeyPrefix = LabelSourceAny + "."
 )
-
-func TestNewFrom(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		lbls Labels
-		want Labels
-	}{
-		{
-			name: "non-empty labels",
-			lbls: lbls,
-			want: lbls,
-		},
-		{
-			name: "empty labels",
-			lbls: Labels{},
-			want: Labels{},
-		},
-		{
-			name: "nil labels",
-			lbls: nil,
-			want: Labels{},
-		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			newLbls := NewFrom(tt.lbls)
-			// Verify that underlying maps are different
-			assert.NotSame(t, tt.lbls, newLbls)
-			// Verify that the map contents are equal
-			assert.EqualValues(t, tt.want, newLbls)
-		})
-	}
-}
 
 func TestSortMap(t *testing.T) {
 	lblsString := strings.Join(lblsArray, ";")
@@ -70,11 +40,11 @@ func TestSortMap(t *testing.T) {
 	require.EqualValues(t, []byte(lblsString), sortedMap)
 }
 
-func TestLabelArraySorted(t *testing.T) {
+func TestSorted(t *testing.T) {
 	lblsString := strings.Join(lblsArray, ";")
 	lblsString += ";"
 	str := ""
-	for _, l := range lbls.LabelArray() {
+	for l := range lbls.All() {
 		str += fmt.Sprintf(`%s:%s=%s;`, l.Source(), l.Key(), l.Value())
 	}
 	require.EqualValues(t, lblsString, str)
@@ -91,23 +61,6 @@ func TestMap2Labels(t *testing.T) {
 		`%`:        `%ed`,
 	}, LabelSourceUnspec)
 	require.EqualValues(t, lbls, m)
-}
-
-func TestMergeLabels(t *testing.T) {
-	to := Labels{
-		"key1": NewLabel("key1", "value1", "source1"),
-		"key2": NewLabel("key2", "value3", "source4"),
-	}
-	from := Labels{
-		"key1": NewLabel("key1", "value3", "source4"),
-	}
-	want := Labels{
-		"key1": NewLabel("key1", "value3", "source4"),
-		"key2": NewLabel("key2", "value3", "source4"),
-	}
-	to.MergeLabels(from)
-	from["key1"] = NewLabel("key1", "changed", "source4")
-	require.EqualValues(t, want, to)
 }
 
 func TestParseLabel(t *testing.T) {
@@ -282,22 +235,22 @@ func TestLabelsCompare(t *testing.T) {
 	la22 := NewLabel("a", "2", "src2")
 	lb22 := NewLabel("b", "2", "src2")
 
-	lblsAll := Labels{la11.Key(): la11, la12.Key(): la12, la22.Key(): la22, lb22.Key(): lb22}
-	lblsFewer := Labels{la11.Key(): la11, la12.Key(): la12, la22.Key(): la22}
-	lblsLa11 := Labels{la11.Key(): la11}
-	lblsLa12 := Labels{la12.Key(): la12}
-	lblsLa22 := Labels{la22.Key(): la22}
-	lblsLb22 := Labels{lb22.Key(): lb22}
+	lblsAll := NewLabels(la11, la12, la22, lb22)
+	lblsFewer := NewLabels(la11, la12, la22)
+	lblsLa11 := NewLabels(la11)
+	lblsLa12 := NewLabels(la12)
+	lblsLa22 := NewLabels(la22)
+	lblsLb22 := NewLabels(lb22)
 
-	require.True(t, lblsAll.Equals(lblsAll))
-	require.False(t, lblsAll.Equals(lblsFewer))
-	require.False(t, lblsFewer.Equals(lblsAll))
-	require.False(t, lblsLa11.Equals(lblsLa12))
-	require.False(t, lblsLa12.Equals(lblsLa11))
-	require.False(t, lblsLa12.Equals(lblsLa22))
-	require.False(t, lblsLa22.Equals(lblsLa12))
-	require.False(t, lblsLa22.Equals(lblsLb22))
-	require.False(t, lblsLb22.Equals(lblsLa22))
+	require.True(t, lblsAll.Equal(lblsAll))
+	require.False(t, lblsAll.Equal(lblsFewer))
+	require.False(t, lblsFewer.Equal(lblsAll))
+	require.False(t, lblsLa11.Equal(lblsLa12))
+	require.False(t, lblsLa12.Equal(lblsLa11))
+	require.False(t, lblsLa12.Equal(lblsLa22))
+	require.False(t, lblsLa22.Equal(lblsLa12))
+	require.False(t, lblsLa22.Equal(lblsLb22))
+	require.False(t, lblsLb22.Equal(lblsLa22))
 }
 
 func TestLabelsK8sStringMap(t *testing.T) {
@@ -386,7 +339,7 @@ func TestLabels_Has(t *testing.T) {
 	}
 }
 
-func TestLabels_GetFromSource(t *testing.T) {
+func TestLabels_FromSource(t *testing.T) {
 	type args struct {
 		source string
 	}
@@ -398,23 +351,23 @@ func TestLabels_GetFromSource(t *testing.T) {
 	}{
 		{
 			name: "should contain label with the given source",
-			l: Labels{
-				"foo":   NewLabel("foo", "bar", "my-source"),
-				"other": NewLabel("other", "bar", ""),
-			},
+			l: v2.NewLabels(
+				v2.MakeLabel("foo", "bar", "my-source"),
+				v2.MakeLabel("other", "bar", ""),
+			),
 			args: args{
 				source: "my-source",
 			},
-			want: Labels{
-				"foo": NewLabel("foo", "bar", "my-source"),
-			},
+			want: v2.NewLabels(
+				v2.MakeLabel("foo", "bar", "my-source"),
+			),
 		},
 		{
 			name: "should return an empty slice as there are not labels for the given source",
-			l: Labels{
-				"foo":   NewLabel("foo", "bar", "any"),
-				"other": NewLabel("other", "bar", ""),
-			},
+			l: v2.NewLabels(
+				v2.MakeLabel("foo", "bar", "any"),
+				v2.MakeLabel("other", "bar", ""),
+			),
 			args: args{
 				source: "my-source",
 			},
@@ -423,8 +376,8 @@ func TestLabels_GetFromSource(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.l.GetFromSource(tt.args.source); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Labels.GetFromSource() = %v, want %v", got, tt.want)
+			if got := tt.l.FromSource(tt.args.source); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Labels.FromSource() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -474,7 +427,7 @@ func TestLabels_HasSource(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.l.HasSource(tt.args.source); got != tt.want {
-				t.Errorf("Labels.GetFromSource() = %v, want %v", got, tt.want)
+				t.Errorf("Labels.HasSource() = %v, want %v", got, tt.want)
 			}
 		})
 	}

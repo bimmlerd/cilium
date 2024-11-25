@@ -32,7 +32,7 @@ func newMockIPCache() *mockIPCache {
 func (m *mockIPCache) labelsForPrefix(prefix netip.Prefix) labels.Labels {
 	lbls := labels.Labels{}
 	for _, l := range m.metadata[prefix] {
-		lbls.MergeLabels(l)
+		lbls = labels.Merge(lbls, l)
 	}
 	return lbls
 }

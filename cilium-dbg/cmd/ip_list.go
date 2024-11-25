@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"text/tabwriter"
 
@@ -79,7 +80,7 @@ func getLabels(ni identity.NumericIdentity) []string {
 		fmt.Fprintf(os.Stderr, "Cannot get identity for ID %s: %s\n", ni.StringID(), err)
 		return []string{ni.String()}
 	}
-	return labels.NewLabelsFromModel(id.Payload.Labels).GetPrintableModel()
+	return slices.Collect(labels.NewLabelsFromModel(id.Payload.Labels).Printable())
 }
 
 func printEntry(w *tabwriter.Writer, entry *models.IPListEntry) {
